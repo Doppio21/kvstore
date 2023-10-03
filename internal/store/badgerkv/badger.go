@@ -3,7 +3,7 @@ package badgerkv
 import (
 	"context"
 	"errors"
-	"kvstore/internal/store"
+	"kvstore/internal/store/kv"
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/sirupsen/logrus"
@@ -25,7 +25,7 @@ type badgerkv struct {
 	db *badger.DB
 }
 
-func New(cfg Config, deps Dependencies) (store.Store, error) {
+func New(cfg Config, deps Dependencies) (kv.Store, error) {
 	ret := &badgerkv{
 		cfg:  cfg,
 		deps: deps,
@@ -44,7 +44,7 @@ func New(cfg Config, deps Dependencies) (store.Store, error) {
 	return ret, nil
 }
 
-func (b *badgerkv) Set(_ context.Context, k store.Key, v store.Value) error {
+func (b *badgerkv) Set(_ context.Context, k kv.Key, v kv.Value) error {
 	err := b.db.Update(func(txn *badger.Txn) error {
 		err := txn.Set(k, v)
 		return err
@@ -55,7 +55,7 @@ func (b *badgerkv) Set(_ context.Context, k store.Key, v store.Value) error {
 	return nil
 }
 
-func (b *badgerkv) Get(_ context.Context, k store.Key) (store.Value, error) {
+func (b *badgerkv) Get(_ context.Context, k kv.Key) (kv.Value, error) {
 	var valCopy []byte
 
 	err := b.db.View(func(txn *badger.Txn) error {
@@ -71,13 +71,13 @@ func (b *badgerkv) Get(_ context.Context, k store.Key) (store.Value, error) {
 		b.deps.Log.Errorf("failed to get key=%s: %v", k, err)
 		return nil, err
 	} else if errors.Is(err, badger.ErrKeyNotFound) {
-		return nil, store.ErrNotFound
+		return nil, kv.ErrNotFound
 	}
 
 	return valCopy, nil
 }
 
-func (b *badgerkv) Delete(_ context.Context, k store.Key) error {
+func (b *badgerkv) Delete(_ context.Context, k kv.Key) error {
 	err := b.db.Update(func(txn *badger.Txn) error {
 		err := txn.Delete(k)
 		return err
@@ -88,7 +88,7 @@ func (b *badgerkv) Delete(_ context.Context, k store.Key) error {
 	return nil
 }
 
-func (b *badgerkv) Scan(ctx context.Context, opts store.ScanOptions, h store.ScanHandler) error {
+func (b *badgerkv) Scan(ctx context.Context, opts kv.ScanOptions, h kv.ScanHandler) error {
 	limit := -1
 	if opts.Limit != 0 {
 		limit = opts.Limit
@@ -117,7 +117,7 @@ func (b *badgerkv) Scan(ctx context.Context, opts store.ScanOptions, h store.Sca
 		}
 		return nil
 	})
-	if err != nil && !errors.Is(err, store.ErrStopScan) {
+	if err != nil && !errors.Is(err, kv.ErrStopScan) {
 		return err
 	}
 

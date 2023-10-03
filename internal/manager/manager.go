@@ -3,13 +3,13 @@ package manager
 import (
 	"context"
 	"errors"
-	"kvstore/internal/store"
+	"kvstore/internal/store/kv"
 
 	"github.com/golang/snappy"
 	"github.com/sirupsen/logrus"
 )
 
-var ErrNotFound = store.ErrNotFound
+var ErrNotFound = kv.ErrNotFound
 
 type KeyValuePair struct {
 	Key   string
@@ -39,7 +39,7 @@ type Config struct {
 }
 
 type Dependencies struct {
-	Store store.Store
+	Store kv.Store
 	Log   *logrus.Logger
 }
 
@@ -74,10 +74,10 @@ func (m *manager) Set(ctx context.Context, key []byte, value []byte) error {
 func (m *manager) Get(ctx context.Context, key []byte) (GetResult, error) {
 	key = wrapDataKey(key)
 	res, err := m.deps.Store.Get(ctx, key)
-	if err != nil && !errors.Is(err, store.ErrNotFound) {
+	if err != nil && !errors.Is(err, kv.ErrNotFound) {
 		m.log.Errorf("failed to get key=%s: %v", key, err)
 		return GetResult{}, err
-	} else if errors.Is(err, store.ErrNotFound) {
+	} else if errors.Is(err, kv.ErrNotFound) {
 		return GetResult{}, ErrNotFound
 	}
 
@@ -114,8 +114,8 @@ func (m *manager) Delete(ctx context.Context, key []byte) error {
 func (m *manager) Scan(ctx context.Context, opts ScanOptions) (ScanResult, error) {
 	const preallocListSize = 64
 	list := make([]KeyValuePair, 0, preallocListSize)
-	err := m.deps.Store.Scan(ctx, store.ScanOptions{},
-		func(k store.Key, v store.Value) error {
+	err := m.deps.Store.Scan(ctx, kv.ScanOptions{},
+		func(k kv.Key, v kv.Value) error {
 			data := v
 			key, err := unwrapDataKey(k)
 			if err != nil {
@@ -133,7 +133,7 @@ func (m *manager) Scan(ctx context.Context, opts ScanOptions) (ScanResult, error
 				}
 			}
 			list = append(list, KeyValuePair{
-				Key:   string(key), 
+				Key:   string(key),
 				Value: string(data),
 			})
 			return nil
@@ -144,5 +144,5 @@ func (m *manager) Scan(ctx context.Context, opts ScanOptions) (ScanResult, error
 
 	return ScanResult{
 		List: list,
-	}, nil 
-} 
+	}, nil
+}

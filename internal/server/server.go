@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io"
 	"kvstore/internal/manager"
-	"kvstore/internal/store"
+	"kvstore/internal/store/kv"
 	"net/http"
 	"strings"
 	"time"
@@ -89,7 +89,7 @@ func (s *Server) handleFunc() http.Handler {
 
 		switch r.Method {
 		case http.MethodGet:
-			res, err := s.deps.Manager.Get(r.Context(), store.Key(key))
+			res, err := s.deps.Manager.Get(r.Context(), kv.Key(key))
 			if err != nil && !errors.Is(err, manager.ErrNotFound) {
 				w.WriteHeader(http.StatusInternalServerError)
 				s.log.Errorf("failed to get key=%s: %v", key, err)
@@ -135,7 +135,7 @@ func (s *Server) handleFunc() http.Handler {
 				}
 			}
 
-			err := s.deps.Manager.Set(r.Context(), store.Key(key), value)
+			err := s.deps.Manager.Set(r.Context(), kv.Key(key), value)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
@@ -144,7 +144,7 @@ func (s *Server) handleFunc() http.Handler {
 			w.WriteHeader(http.StatusOK)
 			return
 		case http.MethodDelete:
-			err := s.deps.Manager.Delete(r.Context(), store.Key(key))
+			err := s.deps.Manager.Delete(r.Context(), kv.Key(key))
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				return

@@ -2,22 +2,23 @@ package mapkv
 
 import (
 	"context"
-	"kvstore/internal/store"
+	"kvstore/internal/store/kv"
+	"strings"
 	"sync"
 )
 
 type Store struct {
-	m  map[string]store.Value
+	m  map[string]kv.Value
 	mu sync.RWMutex
 }
 
-func NewStore() store.Store {
+func NewStore() kv.Store {
 	return &Store{
-		m: make(map[string]store.Value),
+		m: make(map[string]kv.Value),
 	}
 }
 
-func (s *Store) Set(_ context.Context, k store.Key, v store.Value) error {
+func (s *Store) Set(_ context.Context, k kv.Key, v kv.Value) error {
 	st := string(k)
 
 	s.mu.Lock()
@@ -26,17 +27,17 @@ func (s *Store) Set(_ context.Context, k store.Key, v store.Value) error {
 	return nil
 }
 
-func (s *Store) Get(_ context.Context, k store.Key) (store.Value, error) {
+func (s *Store) Get(_ context.Context, k kv.Key) (kv.Value, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if v, ok := s.m[string(k)]; !ok {
-		return nil, store.ErrNotFound
+		return nil, kv.ErrNotFound
 	} else {
 		return v, nil
 	}
 }
 
-func (s *Store) Delete(_ context.Context, k store.Key) error {
+func (s *Store) Delete(_ context.Context, k kv.Key) error {
 	st := string(k)
 
 	s.mu.Lock()
@@ -45,12 +46,24 @@ func (s *Store) Delete(_ context.Context, k store.Key) error {
 	return nil
 }
 
-func (s *Store) Scan(_ context.Context, opts store.ScanOptions, f store.ScanHandler) error {
+func (s *Store) Scan(_ context.Context, opts kv.ScanOptions, f kv.ScanHandler) error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
+	limit := -1
+	if opts.Limit != 0 {
+		limit = opts.Limit
+	}
+
 	for k, v := range s.m {
-		if err := f(store.Key(k), v); err == store.ErrStopScan {
-			break
+		if strings.HasPrefix(k, string(opts.Prefix)) {
+			limit--
+			if err := f(kv.Key(k), v); err == kv.ErrStopScan {
+				break
+			}
+			if limit == 0 {
+				break
+			}
 		}
 	}
 	return nil
