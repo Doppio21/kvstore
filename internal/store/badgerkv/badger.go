@@ -96,10 +96,11 @@ func (b *badgerkv) Scan(ctx context.Context, opts kv.ScanOptions, h kv.ScanHandl
 
 	err := b.db.View(func(txn *badger.Txn) error {
 		opt := badger.DefaultIteratorOptions
+		opt.Prefix = opts.Prefix
 		it := txn.NewIterator(opt)
 		defer it.Close()
 
-		for it.Seek(opts.Prefix); it.ValidForPrefix(opts.Prefix); it.Next() {
+		for it.Seek(opts.Prefix); it.Valid(); it.Next() {
 			limit--
 			item := it.Item()
 

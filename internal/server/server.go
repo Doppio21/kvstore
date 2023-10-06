@@ -2,16 +2,16 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"kvstore/internal/manager"
 	"kvstore/internal/store/kv"
 	"net/http"
-	"strings"
+	"strconv"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 )
 
@@ -44,15 +44,20 @@ func NewServer(cfg Config, deps Dependencies) *Server {
 }
 
 func (s *Server) Run(ctx context.Context) error {
+	router := gin.New()
+	router.Use(LoggerMiddleware(s.log))
+
+	router.GET("/:key", s.getHandler)
+	router.PUT("/:key", s.setHandler)
+	router.DELETE("/:key", s.deleteHandler)
+	router.GET("/", s.scanHandler)
+
 	var (
-		mux = http.NewServeMux()
 		srv = &http.Server{
 			Addr:    s.cfg.Address,
-			Handler: mux,
+			Handler: router,
 		}
 	)
-
-	mux.Handle("/", s.handleFunc())
 
 	serverClosed := make(chan struct{})
 	go func() {
@@ -80,97 +85,86 @@ func (s *Server) Run(ctx context.Context) error {
 
 }
 
-func (s *Server) handleFunc() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func (s *Server) getHandler(c *gin.Context) {
+	key := c.Param("key")
+	res, err := s.deps.Manager.Get(c, kv.Key(key))
+	if s.replyError(c, err) {
+		return
+	}
 
-		key := strings.TrimPrefix(r.URL.Path, "/")
-		s.log.Infof("request [Method: %s, Path: %s, Key :%s]",
-			r.Method, r.URL.Path, key)
+	resp := GetResponse{
+		Key:   res.Key,
+		Value: res.Value,
+	}
 
-		switch r.Method {
-		case http.MethodGet:
-			res, err := s.deps.Manager.Get(r.Context(), kv.Key(key))
-			if err != nil && !errors.Is(err, manager.ErrNotFound) {
-				w.WriteHeader(http.StatusInternalServerError)
-				s.log.Errorf("failed to get key=%s: %v", key, err)
-				return
-			} else if errors.Is(err, manager.ErrNotFound) {
-				w.WriteHeader(http.StatusNotFound)
-				return
-			}
+	c.JSON(http.StatusOK, &resp)
+}
 
-			data, err := json.MarshalIndent(&res, "", "  ")
-			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
+func (s *Server) setHandler(c *gin.Context) {
+	key := c.Param("key")
+	if len(key) == 0 {
+		c.Status(http.StatusBadRequest)
+		return
+	}
 
-			w.WriteHeader(http.StatusOK)
-			_, err = w.Write(data)
-			if err != nil {
-				s.log.Errorf("something wrong on write response: %v", err.Error())
-			}
+	value, err := io.ReadAll(c.Request.Body)
+	if s.replyError(c, err) {
+		return
+	}
 
+	err = s.deps.Manager.Set(c, kv.Key(key), value)
+	if s.replyError(c, err) {
+		return
+	}
+	c.Status(http.StatusOK)
+}
+
+func (s *Server) deleteHandler(c *gin.Context) {
+	key := c.Param("key")
+	err := s.deps.Manager.Delete(c, kv.Key(key))
+	if s.replyError(c, err) {
+		return
+	}
+	c.Status(http.StatusOK)
+}
+
+func (s *Server) scanHandler(c *gin.Context) {
+	var (
+		limit  int
+		err    error
+		prefix = c.Query("prefix")
+	)
+
+	if l := c.Query("limit"); l != "" {
+		limit, err = strconv.Atoi(l)
+		if s.replyError(c, err) {
 			return
-
-		case http.MethodPut:
-			if len(key) == 0 {
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-
-			value := make([]byte, 0, 1024)
-			buff := make([]byte, 1024)
-			for {
-				n, err := r.Body.Read(buff)
-				if err != nil && !errors.Is(err, io.EOF) {
-					fmt.Println(err)
-					w.WriteHeader(http.StatusInternalServerError)
-					return
-				}
-
-				value = append(value, buff[:n]...)
-				if errors.Is(err, io.EOF) {
-					break
-				}
-			}
-
-			err := s.deps.Manager.Set(r.Context(), kv.Key(key), value)
-			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-
-			w.WriteHeader(http.StatusOK)
-			return
-		case http.MethodDelete:
-			err := s.deps.Manager.Delete(r.Context(), kv.Key(key))
-			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-			w.WriteHeader(http.StatusOK)
-			return
-		case http.MethodPost:
-			res, err := s.deps.Manager.Scan(r.Context(), manager.ScanOptions{})
-			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-
-			data, err := json.MarshalIndent(&res, "", "  ")
-			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-
-			w.WriteHeader(http.StatusOK)
-			_, err = w.Write(data)
-			if err != nil {
-				s.log.Errorf("something wrong on write response: %v", err.Error())
-			}
-		default:
-			w.WriteHeader(http.StatusBadRequest)
 		}
+	}
+
+	res, err := s.deps.Manager.Scan(c, manager.ScanOptions{
+		Limit:  limit,
+		Prefix: prefix,
 	})
+	if s.replyError(c, err) {
+		return
+	}
+	c.JSON(http.StatusOK, &res)
+}
+
+func (s *Server) replyError(c *gin.Context, err error) bool {
+	if err == nil {
+		return false
+	}
+
+	resp := ErrorResponse{Message: err.Error()}
+	code := http.StatusInternalServerError
+
+	switch {
+	case errors.Is(err, manager.ErrNotFound):
+		code = http.StatusNotFound
+	}
+
+	c.JSON(code, &resp)
+	return true
 }

@@ -21,6 +21,8 @@ type GetResult struct {
 }
 
 type ScanOptions struct {
+	Limit  int
+	Prefix string
 }
 
 type ScanResult struct {
@@ -114,7 +116,10 @@ func (m *manager) Delete(ctx context.Context, key []byte) error {
 func (m *manager) Scan(ctx context.Context, opts ScanOptions) (ScanResult, error) {
 	const preallocListSize = 64
 	list := make([]KeyValuePair, 0, preallocListSize)
-	err := m.deps.Store.Scan(ctx, kv.ScanOptions{},
+	err := m.deps.Store.Scan(ctx, kv.ScanOptions{
+		Prefix: wrapDataKey(kv.Key(opts.Prefix)),
+		Limit:  opts.Limit,
+	},
 		func(k kv.Key, v kv.Value) error {
 			data := v
 			key, err := unwrapDataKey(k)
