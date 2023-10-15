@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 )
 
@@ -24,14 +26,16 @@ type Config struct {
 }
 
 type Dependencies struct {
-	Manager manager.Manager
-	Log     *logrus.Logger
+	Registry *prometheus.Registry
+	Manager  manager.Manager
+	Log      *logrus.Logger
 }
 
 type Server struct {
 	cfg  Config
 	deps Dependencies
 
+	mc  *serverMetricsCollector
 	log *logrus.Entry
 }
 
@@ -39,18 +43,23 @@ func NewServer(cfg Config, deps Dependencies) *Server {
 	return &Server{
 		cfg:  cfg,
 		deps: deps,
+		mc:   newMetricColletor(),
 		log:  deps.Log.WithField("component", "server"),
 	}
 }
 
 func (s *Server) Run(ctx context.Context) error {
+	s.deps.Registry.MustRegister(s.mc)
+
 	router := gin.New()
 	router.Use(LoggerMiddleware(s.log))
+	router.Use(MetricsMiddleware(s.mc))
 
 	router.GET("/:key", s.getHandler)
 	router.PUT("/:key", s.setHandler)
 	router.DELETE("/:key", s.deleteHandler)
 	router.GET("/", s.scanHandler)
+	router.GET("/metrics", gin.WrapH(promhttp.HandlerFor(s.deps.Registry, promhttp.HandlerOpts{})))
 
 	var (
 		srv = &http.Server{

@@ -8,10 +8,13 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 )
 
 func main() {
+	reg := prometheus.NewRegistry()
+
 	ctx, cancel := signal.NotifyContext(context.Background(),
 		syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
@@ -34,8 +37,9 @@ func main() {
 	server := server.NewServer(server.Config{
 		Address: "localhost:8080",
 	}, server.Dependencies{
-		Manager: mgr,
-		Log:     log,
+		Registry: reg,
+		Manager:  mgr,
+		Log:      log,
 	})
 
 	if err := server.Run(ctx); err != nil {

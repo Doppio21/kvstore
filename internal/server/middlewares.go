@@ -19,3 +19,13 @@ func LoggerMiddleware(log *logrus.Entry) gin.HandlerFunc {
 		)
 	}
 }
+
+func MetricsMiddleware(mc *serverMetricsCollector) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		mc.counter.Inc()
+		now := time.Now()
+		c.Next()
+		elapsed := time.Since(now)
+		mc.time.Observe(float64(elapsed.Seconds()))
+	}
+}
