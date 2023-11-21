@@ -1,7 +1,7 @@
 package mapkv
 
 import (
-	"kvstore/internal/store/kvtests"
+	"kvstore/internal/storeservice/store/kvtests"
 	"testing"
 )
 

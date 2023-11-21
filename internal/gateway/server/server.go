@@ -5,10 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"kvstore/internal/manager"
-	"kvstore/internal/store/kv"
+	"kvstore/internal/storeservice/client"
+	"kvstore/internal/storeservice/manager"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -26,9 +25,9 @@ type Config struct {
 }
 
 type Dependencies struct {
-	Registry *prometheus.Registry
-	Manager  manager.Manager
-	Log      *logrus.Logger
+	Registry    *prometheus.Registry
+	Log         *logrus.Logger
+	StoreClient *client.Client
 }
 
 type Server struct {
@@ -96,14 +95,14 @@ func (s *Server) Run(ctx context.Context) error {
 
 func (s *Server) getHandler(c *gin.Context) {
 	key := c.Param("key")
-	res, err := s.deps.Manager.Get(c, kv.Key(key))
+	value, err := s.deps.StoreClient.Get(c, key)
 	if s.replyError(c, err) {
 		return
 	}
 
 	resp := GetResponse{
-		Key:   res.Key,
-		Value: res.Value,
+		Key:   key,
+		Value: string(value),
 	}
 
 	c.JSON(http.StatusOK, &resp)
@@ -116,49 +115,42 @@ func (s *Server) setHandler(c *gin.Context) {
 		return
 	}
 
-	value, err := io.ReadAll(c.Request.Body)
+	val, err := io.ReadAll(c.Request.Body)
 	if s.replyError(c, err) {
 		return
 	}
 
-	err = s.deps.Manager.Set(c, kv.Key(key), value)
+	err = s.deps.StoreClient.Put(c, key, val)
 	if s.replyError(c, err) {
 		return
 	}
+
 	c.Status(http.StatusOK)
 }
 
 func (s *Server) deleteHandler(c *gin.Context) {
-	key := c.Param("key")
-	err := s.deps.Manager.Delete(c, kv.Key(key))
-	if s.replyError(c, err) {
-		return
-	}
+	_ = c.Param("key")
+	// TODO: GRPC request
+
 	c.Status(http.StatusOK)
 }
 
 func (s *Server) scanHandler(c *gin.Context) {
-	var (
-		limit  int
-		err    error
-		prefix = c.Query("prefix")
-	)
+	// var (
+	// 	limit  int
+	// 	err    error
+	// 	prefix = c.Query("prefix")
+	// )
 
-	if l := c.Query("limit"); l != "" {
-		limit, err = strconv.Atoi(l)
-		if s.replyError(c, err) {
-			return
-		}
-	}
+	// if l := c.Query("limit"); l != "" {
+	// 	limit, err = strconv.Atoi(l)
+	// 	if s.replyError(c, err) {
+	// 		return
+	// 	}
+	// }
 
-	res, err := s.deps.Manager.Scan(c, manager.ScanOptions{
-		Limit:  limit,
-		Prefix: prefix,
-	})
-	if s.replyError(c, err) {
-		return
-	}
-	c.JSON(http.StatusOK, &res)
+	// TODO: GRPC request
+	// c.JSON(http.StatusOK, &res)
 }
 
 func (s *Server) replyError(c *gin.Context, err error) bool {

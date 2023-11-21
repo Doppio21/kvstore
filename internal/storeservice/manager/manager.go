@@ -3,7 +3,7 @@ package manager
 import (
 	"context"
 	"errors"
-	"kvstore/internal/store/kv"
+	"kvstore/internal/storeservice/store/kv"
 
 	"github.com/golang/snappy"
 	"github.com/sirupsen/logrus"

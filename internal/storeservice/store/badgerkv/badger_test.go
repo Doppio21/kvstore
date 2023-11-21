@@ -1,8 +1,8 @@
 package badgerkv
 
 import (
-	"kvstore/internal/store/kv"
-	"kvstore/internal/store/kvtests"
+	"kvstore/internal/storeservice/store/kv"
+	"kvstore/internal/storeservice/store/kvtests"
 	"testing"
 
 	"github.com/sirupsen/logrus"

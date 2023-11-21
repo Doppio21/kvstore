@@ -3,7 +3,7 @@ package badgerkv
 import (
 	"context"
 	"errors"
-	"kvstore/internal/store/kv"
+	"kvstore/internal/storeservice/store/kv"
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/sirupsen/logrus"

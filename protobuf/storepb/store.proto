@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+option go_package = ".;storepb";
+
+package storepb;
+
+service Store {
+    rpc Put(PutRequest) returns (PutResponse) {}
+    rpc Get(GetRequest) returns (GetResponse) {}
+}
+
+message Error {
+    string message = 1;
+    int32 code = 2;
+}
+
+message PutRequest {
+    string key = 1;
+    bytes value = 2;
+}
+
+message PutResponse {
+    Error error = 1;
+}
+
+message GetRequest {
+    string key = 1;
+}
+
+message GetResponse {
+    Error error = 1;
+    bytes value = 2;
+}

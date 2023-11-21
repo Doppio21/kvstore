@@ -2,7 +2,7 @@ package mapkv
 
 import (
 	"context"
-	"kvstore/internal/store/kv"
+	"kvstore/internal/storeservice/store/kv"
 	"strings"
 	"sync"
 )

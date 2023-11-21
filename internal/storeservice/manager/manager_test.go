@@ -2,7 +2,7 @@ package manager
 
 import (
 	"context"
-	"kvstore/internal/store/mapkv"
+	"kvstore/internal/storeservice/store/mapkv"
 	"sort"
 	"strings"
 	"testing"

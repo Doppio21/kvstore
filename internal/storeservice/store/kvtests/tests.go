@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"kvstore/internal/store/kv"
+	"kvstore/internal/storeservice/store/kv"
 	"reflect"
 	"runtime"
 	"testing"
